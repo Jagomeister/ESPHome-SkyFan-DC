@@ -1,0 +1,43 @@
+# TMP117 Temperature Sensors Package
+# Uncomment include in skyfan_dc.yaml
+#
+# This exposes TMP117 Temperature Sensor(s) to the frontend (like Home Assistant).
+# Uses I2C.
+
+substitutions:
+  tmp117_name: "${friendly_name} I2C Temp"
+
+# Default I2C pins
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  scan: true
+
+sensor:
+  - platform: tmp117
+    name: "${tmp117_name} 0x48"
+    update_interval: 60s
+    address: 0x48
+    accuracy_decimals: 2
+    disabled_by_default: true
+
+  - platform: tmp117
+    name: "${tmp117_name} 0x49"
+    update_interval: 60s
+    address: 0x49
+    accuracy_decimals: 2
+    disabled_by_default: true
+
+  - platform: tmp117
+    name: "${tmp117_name} 0x4A"
+    update_interval: 60s
+    address: 0x4A
+    accuracy_decimals: 2
+    disabled_by_default: true
+
+  - platform: tmp117
+    name: "${tmp117_name} 0x4B"
+    update_interval: 60s
+    address: 0x4B
+    accuracy_decimals: 2
+    disabled_by_default: true

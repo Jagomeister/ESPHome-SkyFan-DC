@@ -1,0 +1,175 @@
+substitutions:
+  skyfan_model: SKY903
+  device_name: skyfan_dc
+  friendly_name: "SkyFan DC"
+
+
+  # Static IP (edit to suit your network) and uncomment section below
+  static_ip: "192.168.1.10"
+  gateway_ip: "192.168.1.1"
+  subnet_mask: "255.255.255.0"
+  dns1_ip: "192.168.1.1"
+  # dns2_ip: "1.1.1.1"
+
+packages:
+  # Default Fan select one of the following options
+  # 5: Fan acts as a 5 speed fan and eco is only active via mode
+  fan: !include skyfan_fan5.yaml
+  # 6: Fan acts as a 6 speed fan and eco is mapped to speed 2  
+  #fan: !include skyfan_fan6.yaml
+  
+  # Add light and light colour support
+  light: !include skyfan_light.yaml
+
+  # Wifi/uptime/ip sensors package:
+  sensor_wifi: !include skyfan_sensor_wifi.yaml 
+
+  # NTC temperature sensor package:
+  #sensor_temp_ntc: !include skyfan_sensor_temp_ntc.yaml
+  
+  # I2C (TMP117) temperature sensors package:
+  #sensor_temp_i2c: !include skyfan_sensor_temp_i2c.yaml  
+
+esphome:
+  name: ${device_name}
+  name_add_mac_suffix: true
+  friendly_name: ${friendly_name}
+
+
+esp8266:
+  board: d1_mini
+
+# SkyFan uses the UART (GPIO1/GPIO3) to talk to the Tuya MCU, so disable serial logging.
+logger:
+  baud_rate: 0
+
+wifi:
+#  ssid: !secret wifi_ssid
+#  password: !secret wifi_password
+
+# Uncomment to enable static IP
+#  manual_ip:
+#    static_ip: ${static_ip}
+#    gateway: ${gateway_ip}
+#    subnet: ${subnet_mask}
+#    dns1: ${dns1_ip}
+#    dns2: ${dns2_ip}
+
+  ap:
+#    ssid: "${friendly_name} Fallback"
+     password: ""
+#    password: !secret ap_password
+
+
+      
+captive_portal:
+
+web_server:
+  port: 80
+
+api:
+#  encryption:
+#    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+#    password: !secret ota_password
+
+uart:
+  id: uart_bus
+  tx_pin: GPIO1
+  rx_pin: GPIO3
+  baud_rate: 9600
+
+
+# Tuya MCU over serial
+tuya:
+  id: tuya_mcu
+  # Flash onboard LED whenever a datapoint update is seen from the MCU.
+  # (DPs listed here cover the fan + light packages below.)
+  on_datapoint_update:
+    - sensor_datapoint: 1
+      datapoint_type: bool
+      then:
+        - script.execute: blink_led_activity
+    - sensor_datapoint: 2
+      datapoint_type: enum
+      then:
+        - script.execute: blink_led_activity
+    - sensor_datapoint: 3
+      datapoint_type: int
+      then:
+        - script.execute: blink_led_activity
+    - sensor_datapoint: 8
+      datapoint_type: enum
+      then:
+        - script.execute: blink_led_activity
+    - sensor_datapoint: 15
+      datapoint_type: bool
+      then:
+        - script.execute: blink_led_activity
+    - sensor_datapoint: 16
+      datapoint_type: int
+      then:
+        - script.execute: blink_led_activity
+    - sensor_datapoint: 19
+      datapoint_type: enum
+      then:
+        - script.execute: blink_led_activity
+    - sensor_datapoint: 22
+      datapoint_type: enum
+      then:
+        - script.execute: blink_led_activity
+
+# Onboard LED
+switch:
+  - platform: gpio
+    id: onboard_led
+    pin:
+      number: GPIO2
+      inverted: true
+
+
+script:
+  - id: blink_led_activity
+    mode: restart
+    then:
+      - switch.turn_on: onboard_led
+      - delay: 250ms
+      - switch.turn_off: onboard_led
+
+
+# Code does work
+  # - id: blink_led_captive_portal
+    # mode: restart
+    # then:
+      # - switch.turn_on: onboard_led
+      # - delay: 80ms
+      # - switch.turn_off: onboard_led
+      # - delay: 80ms
+      # - script.execute: blink_led_captive_portal
+
+# # Stop the captive portal blink
+  # - id: stop_blink_led_captive_portal
+    # then:
+      # - script.stop: blink_led_captive_portal
+      # - switch.turn_off: onboard_led
+
+
+# interval:
+  # # Start/stop the fast blink depending if AP mode is active
+  # - interval: 5s
+    # then:
+      # - if:
+          # condition: 
+            # wifi.ap_active
+          # then:
+            # - if:
+                # condition:
+                  # not:
+                    # script.is_running: blink_led_captive_portal
+                # then:
+                  # - script.execute: blink_led_captive_portal
+          # else:
+            # - script.stop: blink_led_captive_portal
+            # - switch.turn_off: onboard_led    

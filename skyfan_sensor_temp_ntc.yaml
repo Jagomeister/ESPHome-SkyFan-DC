@@ -1,0 +1,73 @@
+# NTC Temp Sensor Package
+# Based on original code by: James Eggleston
+# Uncomment include in skyfan_dc.yaml
+
+substitutions:
+  ntc_temp_name: "${friendly_name} NTC Temp"
+  
+  
+  
+
+# Setup temperature reading so you don't get a random reading come through at startup
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - switch.turn_on: ntc_vcc
+      - component.update: temp_voltage
+      - switch.turn_off: ntc_vcc
+      - sensor.template.publish:
+          id: skyfan_temp
+          state: !lambda 'return id(ntc_temp).state;'
+
+sensor:
+  # Template sensor that sends the correct reading through to Home Assistant
+  - id: skyfan_temp
+    platform: template
+    name: ${ntc_temp_name}
+    unit_of_measurement: "°C"
+    device_class: "temperature"
+    state_class: "measurement"
+    accuracy_decimals: 0
+    disabled_by_default: true
+
+  # ADC sensor to get the voltage drop on the thermistor
+  # For ESP8266 D1 mini, use A0.
+  - id: temp_voltage
+    platform: adc
+    pin: A0
+    update_interval: never
+
+  # Use voltage drop to calculate resistance of the thermistor
+  - id: temp_resistance
+    platform: resistance
+    sensor: temp_voltage
+    configuration: DOWNSTREAM
+    resistor: 100kOhm
+    reference_voltage: 3.3V
+
+  # Use resistance to calculate the temperature
+  - id: ntc_temp
+    platform: ntc
+    sensor: temp_resistance
+    calibration:
+      b_constant: 3435
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+
+# Only turn on the power to the thermistor to check temp, to stop self warming effect
+interval:
+  - interval: 30s
+    then:
+      - switch.turn_on: ntc_vcc
+      - component.update: temp_voltage
+      - switch.turn_off: ntc_vcc
+      - sensor.template.publish:
+          id: skyfan_temp
+          state: !lambda 'return id(ntc_temp).state;'
+
+switch:
+  - id: ntc_vcc
+    platform: gpio
+    # GPIO14 = D5 on Wemos D1 mini
+    pin: GPIO14

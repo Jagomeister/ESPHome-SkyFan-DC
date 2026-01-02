@@ -1,0 +1,76 @@
+# SkyFan DC - Lights package
+# Uncomment include in skyfan_dc.yaml
+
+substitutions:
+  skyfan_light_name: "${friendly_name} Light"
+  light_colour_name: "${friendly_name} Light Colour"
+  light_power_name: "${friendly_name} Light Power"
+   
+
+# Light power + dimmer (adjust max_value if your dimmer tops out at 255 instead of 1000)
+light:
+  - platform: tuya
+    name: ${skyfan_light_name}
+    id: skyfan_light
+    restore_mode: RESTORE_DEFAULT_OFF    
+    disabled_by_default: false
+    switch_datapoint: 15
+    dimmer_datapoint: 16
+    min_value: 0
+    max_value: 1000
+    
+    # Triggers for the power sensor
+    # Immediate update when light state changes
+    on_turn_on:
+      then:
+        - component.update: light_power 
+    on_turn_off:
+      then:
+        - component.update: light_power 
+
+    # Immediate update when brightness changes
+    on_state:
+      then:
+        - component.update: light_power    
+
+
+# Tri-colour light control (Warm / Neutral / Cool)
+select:
+  - platform: tuya
+    name: ${light_colour_name}
+    id: skyfan_light_colour
+    enum_datapoint: 19
+    optimistic: true
+    disabled_by_default: true
+    options:
+      0: Warm
+      1: Neutral
+      2: Cool
+
+
+
+
+# This exposes a faux Power Sensor to the frontend (like Home Assistant). 
+# The power value (Watts) for each brightness is estimated from the Skyfan DC
+# light specification.
+#
+
+# Based on 20w LED
+# if the specs are differnt "20.0f" would need to be changed
+# Assumes a linear curve for the dimming
+sensor:
+  - platform: template
+    id: light_power
+    name: ${light_power_name}
+    unit_of_measurement: "W"
+    device_class: "power"
+    state_class: "measurement"
+    accuracy_decimals: 1
+    update_interval: 30s
+    lambda: |-
+      if (!id(skyfan_light).current_values.is_on()) {
+        return 0.0f;
+      }
+      // brightness is 0.0 .. 1.0
+      return id(skyfan_light).current_values.get_brightness() * 20.0f;
+    disabled_by_default: true

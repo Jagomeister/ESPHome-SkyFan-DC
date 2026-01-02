@@ -1,0 +1,182 @@
+# SkyFan DC - 6 Speed Fan package
+#
+# This package make the fan act as a 6 speed fan in home Assistant
+# Fan is really a 5 speed fan with a weird 6th speed via eco mode
+# Fan mode is also still exported to Home Assistant
+#
+# Does this by mapping the speeds as follows
+#   1 = Speed 1
+#   2 = ECO
+#   3 = Speed 2
+#   4 = Speed 3
+#   5 = Speed 4
+#   6 = Speed 5
+#
+# 5 physical speeds + ECO mode.
+# Expose to Home Assistant as 6 discrete speeds
+
+substitutions:
+  skyfan_fan_name: "${friendly_name} Fan"
+  fan_mode_name: "${friendly_name} Mode"  
+  fan_timer_name: "${friendly_name} Timer"   
+  fan_power_name: "${friendly_name} Fan Power"
+
+fan:
+  # Raw Tuya fan (internal): 5-speed fan (DP3 = 1..5)
+  - platform: tuya
+    id: skyfan_fan_raw
+    internal: true
+    switch_datapoint: 1
+    speed_datapoint: 3
+    speed_count: 5
+    direction_datapoint: 8
+
+  # Exposed fan: 6-speed mapping (ECO is "speed 2")
+  - platform: template
+    name: ${skyfan_fan_name}
+    id: skyfan_fan
+    speed_count: 6
+    has_direction: true
+
+    on_turn_on:
+      then:
+        - if:
+            condition:
+              lambda: 'return id(skyfan_fan).speed == 2;'
+            then:
+              - select.set:
+                  id: skyfan_mode
+                  option: "Eco"
+            else:
+              - select.set:
+                  id: skyfan_mode
+                  option: "Normal"
+
+        - fan.turn_on:
+            id: skyfan_fan_raw
+            speed: !lambda |-
+              int s = (int) id(skyfan_fan).speed;
+              if (s <= 0) return 1;
+              if (s == 2) return 2;     // ECO uses raw speed 2
+              if (s > 2) return s - 1;  // shift down (3->2, 4->3, 5->4, 6->5)
+              return s;              
+        - component.update: fan_power      
+
+    on_turn_off:
+      then:
+        - fan.turn_off: skyfan_fan_raw
+
+    on_speed_set:
+      then:
+        # x is the requested speed (1..6)
+        - if:
+            condition:
+              lambda: 'return x == 2;'
+            then:
+              - select.set:
+                  id: skyfan_mode
+                  option: "Eco"
+            else:
+              - select.set:
+                  id: skyfan_mode
+                  option: "Normal"
+
+        - fan.turn_on:
+            id: skyfan_fan_raw
+            speed: !lambda |-
+              if (x <= 1) return 1;
+              if (x == 2) return 2;   // ECO
+              int s = x - 1;          // shift down
+              if (s > 5) s = 5;
+              return s;
+        - component.update: fan_power      
+
+    on_direction_set:
+      then:
+        # x == 0 => forward, x == 1 => reverse
+        - if:
+            condition:
+              lambda: 'return x == FanDirection::FORWARD;'
+            then:
+              - fan.turn_on:
+                  id: skyfan_fan_raw
+                  direction: forward
+            else:
+              - fan.turn_on:
+                  id: skyfan_fan_raw
+                  direction: reverse
+
+select:
+  # Fan mode (DP2). Used so "Speed 2" can toggle ECO automatically.
+  # Enable in Home Assistant if you want to manually use SLEEP.
+  - platform: tuya
+    name: ${fan_mode_name}
+    id: skyfan_mode
+    enum_datapoint: 2
+    optimistic: true
+    disabled_by_default: true
+    options:
+      0: Normal
+      1: Eco
+      2: Sleep
+
+  # Run timer 1h..12h (DP22)
+  - platform: tuya
+    name: ${fan_timer_name}
+    id: skyfan_timer
+    enum_datapoint: 22
+    optimistic: true
+    disabled_by_default: true
+    options:
+      0: "Off"
+      1: 1h
+      2: 2h
+      3: 3h
+      4: 4h
+      5: 5h
+      6: 6h
+      7: 7h
+      8: 8h
+      9: 9h
+      10: 10h
+      11: 11h
+      12: 12h
+      
+      
+# Faux Fan Power Sensor Package
+# Based on original code by: James Eggleston
+#
+# Exposes a faux Power sensor (Watts) based on SkyFan DC datasheets.
+# Select the model by setting the substitution `skyfan_model` to one of:
+#   SKY903, SKY1203, SKY1303, SKY1503, SKY1204, SKY1404
+#
+# IMPORTANT:
+# - Set `skyfan_model` WITHOUT quotes so it can be used as a C++ array name.
+# - This reads the current speed from the fan component id `skyfan_fan`.
+
+
+sensor:
+  - id: fan_power
+    platform: template
+    name: ${fan_power_name}
+    update_interval: 30s
+    unit_of_measurement: "W"
+    device_class: "power"
+    state_class: "measurement"
+    accuracy_decimals: 1
+    lambda: |-
+      // Index 0 is OFF, 1..6 are speeds 1..6 (2 is eco)
+      static const float SKY903[7]   = {0,3,4.8,7,12,19.5,32};
+      static const float SKY1203[7]  = {0,3.6,5.4,8,15,22,32.5};
+      static const float SKY1303[7]  = {0,3.9,5.8,9,15.6,25.2,31.8};
+      static const float SKY1503[7]  = {0,3.9,6,9,16,26,44.2};
+      static const float SKY1204[7]  = {0,3.8,5.8,9,17,27,30};
+      static const float SKY1404[7]  = {0,3.5,5.5,8,15,23,38};
+ 
+      if (id(skyfan_fan).state) {
+        return ${skyfan_model}[ (int) id(skyfan_fan).speed ]; 
+      } else {
+        return 0.0f;
+      } 
+
+    disabled_by_default: true      

@@ -1,4 +1,5 @@
 substitutions:
+  # Options: SKY903 SKY1203 SKY1303 SKY1503 SKY1204 SKY1404
   skyfan_model: SKY903
   device_name: skyfan_dc
   friendly_name: "SkyFan DC"

@@ -1,6 +1,8 @@
 # TMP117 Temperature Sensors Package
 # Uncomment include in skyfan_dc.yaml
 #
+# Based on original code by: James Eggleston
+#
 # This exposes TMP117 Temperature Sensor(s) to the frontend (like Home Assistant).
 # Uses I2C.
 
